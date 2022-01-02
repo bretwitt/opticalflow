@@ -19,22 +19,16 @@ def get_corners(_frame):
 
     dst_norm = np.empty(dst.shape, dtype=np.float32)
     cv2.normalize(dst, dst_norm, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-    dst_norm_scaled = cv2.convertScaleAbs(dst_norm)
-    #
+
     for _i in range(dst_norm.shape[0]):
         for _j in range(dst_norm.shape[1]):
             if int(dst_norm[_i, _j]) > 200:
-                # _X[_c] = i
-                # _Y[_c] = j
                 _X = np.append(_X, int(_j))
                 _Y = np.append(_Y, int(_i))
-                # cv2.circle(dst_norm_scaled, (_j, _i), 5, (0, 0, 255))
     return _X, _Y
 
 
 def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
-    k_size = 25
-
     _orig_frame = _frame
 
     _frame = cv2.cvtColor(_frame, cv2.COLOR_BGR2GRAY)
@@ -65,7 +59,6 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             o_x = k_w - _x
             o_y = k_h - _y
             for _yi in range(0, k_h):
-                # print(o_y + _yi)
                 I_x = _grad_x[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
                 I_y = _grad_y[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
                 I_t = _grad_t[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
@@ -92,6 +85,7 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             color = (0, 0, np.linalg.norm(v) * 255)
 
             _orig_frame = cv2.arrowedLine(_orig_frame, (_x, _y), (_x + int(v_norm[0]), _y + int(v_norm[1])), color, 4)
+
     return _orig_frame
 
 
@@ -99,8 +93,9 @@ def get_index(_x, _y, _h):
     return _h * _y + _x
 
 
-width = 1080
-height = 720
+width = 480
+height = 270
+k_size = 13
 
 cap = cv2.VideoCapture('videos/video.mov')
 cap.set(3, width)
@@ -108,7 +103,6 @@ cap.set(4, height)
 
 ret, frame = cap.read()
 last_frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-
 
 n = 7
 x = np.linspace(0, width - 1, n, dtype=int)
@@ -126,11 +120,12 @@ while cap.isOpened():
         if i % 2 == 0:
             i += 1
             continue
+
         frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
         step_frame = np.copy(frame)
 
         frame = lucas_kanade(frame, last_frame, x, y, n)
-        last_frame = step_frame
+        last_frame = frame
 
         cv2.imshow('Frame', frame)
         out.write(frame)
@@ -145,32 +140,3 @@ while cap.isOpened():
 cap.release()
 out.release()
 cv2.destroyAllWindows()
-
-# Made it myself but literally O(n^4) and useless. Kept for the mems :)
-# def convolve(_frame, _kernel):
-#     height = _frame.shape[0]
-#     width = _frame.shape[1]
-#     _frame = cv2.cvtColor(_frame, cv2.COLOR_BGR2GRAY)
-#
-#     _kernel_height = _kernel.shape[0]
-#     _kernel_width = _kernel.shape[1]
-#     _w_x = math.floor(_kernel_height / 2)
-#     _w_y = math.floor(_kernel_width / 2)
-#     _copy_frame = np.copy(_frame)
-#
-#     for i in range(0, height):
-#         for j in range(0, width):
-#             acc = 0
-#             # print(i, j)
-#             for ki in range(0, _kernel_height):
-#                 for kj in range(0, _kernel_width):
-#                     x = ki + i - _w_x
-#                     y = kj + j - _w_y
-#                     if (x >= 0) & (y >= 0) & (y < width) & (x < height):
-#                         acc = np.add(acc, _kernel[ki][kj] * _frame[x][y], casting='unsafe')
-#                         # print('KERNEL XY', ki, kj, "KERNEL VAL", _kernel[ki][kj], "XY", x, y, "FRAME RGB",
-#                         # _frame[x][y], acc, "ACC", acc)
-#
-#             # print(acc)
-#             _copy_frame[i][j] = acc
-#     return _copy_frame
