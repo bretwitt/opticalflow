@@ -59,12 +59,10 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             o_x = k_w - _x
             o_y = k_h - _y
             for _yi in range(0, k_h):
-                I_x = _grad_x[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
-                I_y = _grad_y[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
-                I_t = _grad_t[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
-                I_x_k[_yi] = I_x
-                I_y_k[_yi] = I_y
-                I_t_k[_yi] = I_t
+                k_c = math.floor(k_w / 2)
+                I_x_k[_yi] = _grad_x[o_y + _yi][o_x - k_c: o_x + k_c + 1]
+                I_y_k[_yi] = _grad_y[o_y + _yi][o_x - k_c: o_x + k_c + 1]
+                I_t_k[_yi] = _grad_t[o_y + _yi][o_x - k_c: o_x + k_c + 1]
 
             I_x_k_sum = signal.convolve2d(I_x_k, kernel_sum, boundary='symm', mode='same').flatten()
             I_y_k_sum = signal.convolve2d(I_y_k, kernel_sum, boundary='symm', mode='same').flatten()
@@ -75,10 +73,12 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             A_sqr = A.T * A
             v = np.linalg.pinv(A_sqr) * A.T * b
 
-            # # TODO: Aperture problem condition, commented out since not sure how the eigenvalues are supposed to scale
-            # eigenvalue_1 = np.min(abs(np.linalg.eigvals(A_sqr)))
-            # if eigenvalue_1 >= 90450873:
-            #     continue
+            eigenvalues = np.linalg.eigvals(A_sqr)
+            eig1 = np.max(eigenvalues)
+            eig2 = np.min(eigenvalues)
+            ratio = eig1/eig2
+            if ratio >= 1000:
+                continue
 
             # Normalized then scaled vector for displaying purposes
             v_norm = np.array(v) / (np.sqrt(np.sum(np.array(v) ** 2)) + eps) * 15
@@ -93,35 +93,34 @@ def get_index(_x, _y, _h):
     return _h * _y + _x
 
 
-width = 480
-height = 270
-k_size = 13
+# width = 480
+# height = 270
+width = 640
+height = 360
+k_size = 15
 
 cap = cv2.VideoCapture('videos/video.mov')
-cap.set(3, width)
-cap.set(4, height)
+cap.set(3, height)
+cap.set(4, width)
 
 ret, frame = cap.read()
-last_frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+last_frame = frame
 
-n = 7
+n = 10
 x = np.linspace(0, width - 1, n, dtype=int)
 y = np.linspace(0, height - 1, n, dtype=int)
 
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 
-out = cv2.VideoWriter('videos/output001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
+out = cv2.VideoWriter('videos/001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
 
 i = 0
 while cap.isOpened():
     ret, frame = cap.read()
 
     if ret:
-        if i % 2 == 0:
-            i += 1
-            continue
 
-        frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+        # frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
         step_frame = np.copy(frame)
 
         frame = lucas_kanade(frame, last_frame, x, y, n)
