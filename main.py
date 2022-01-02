@@ -6,14 +6,36 @@ import scipy.signal as signal
 from scipy.sparse.linalg.isolve.lsqr import eps
 
 
-def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
-    k_size = 15
+def get_corners(_frame):
+    _X = np.zeros(0)
+    _Y = np.zeros(0)
+    gray = cv2.cvtColor(_frame, cv2.COLOR_BGR2GRAY)
 
-    w = frame.shape[1]
-    h = frame.shape[0]
+    blockSize = 2
+    apertureSize = 3
+    k = 0.04
+    gray = np.float32(gray)
+    dst = cv2.cornerHarris(gray, blockSize, apertureSize, k)
+
+    dst_norm = np.empty(dst.shape, dtype=np.float32)
+    cv2.normalize(dst, dst_norm, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    dst_norm_scaled = cv2.convertScaleAbs(dst_norm)
+    #
+    for _i in range(dst_norm.shape[0]):
+        for _j in range(dst_norm.shape[1]):
+            if int(dst_norm[_i, _j]) > 200:
+                # _X[_c] = i
+                # _Y[_c] = j
+                _X = np.append(_X, int(_j))
+                _Y = np.append(_Y, int(_i))
+                # cv2.circle(dst_norm_scaled, (_j, _i), 5, (0, 0, 255))
+    return _X, _Y
+
+
+def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
+    k_size = 25
 
     _orig_frame = _frame
-    _empty_frame = np.zeros((_orig_frame.shape[0], _orig_frame.shape[1]))
 
     _frame = cv2.cvtColor(_frame, cv2.COLOR_BGR2GRAY)
     _last_frame = cv2.cvtColor(_last_frame, cv2.COLOR_BGR2GRAY)
@@ -28,10 +50,6 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
                                                                                                          boundary='symm',
                                                                                                          mode='same')
 
-    # Get sum of gradients around a sliding window size "k_size" centered at each pixel then flatten it
-    I_x = signal.convolve2d(_grad_x, kernel_sum, boundary='symm', mode='same').flatten()
-    I_y = signal.convolve2d(_grad_y, kernel_sum, boundary='symm', mode='same').flatten()
-    I_t = signal.convolve2d(_grad_t, kernel_sum, boundary='symm', mode='same').flatten()
     k_w = k_size
     k_h = k_size
 
@@ -48,29 +66,27 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             o_y = k_h - _y
 
             for _yi in range(0, k_h):
-                I_x_k[_yi] = I_x[get_index(o_x, o_y + _yi, h): get_index(o_x + k_w, o_y + _yi, h)]
-                I_y_k[_yi] = I_y[get_index(o_x, o_y + _yi, h): get_index(o_x + k_w, o_y + _yi, h)]
-                I_t_k[_yi] = I_t[get_index(o_x, o_y + _yi, h): get_index(o_x + k_w, o_y + _yi, h)]
+                # print(o_y + _yi)
+                I_x = _grad_x[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
+                I_y = _grad_y[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
+                I_t = _grad_t[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
+                I_x_k[_yi] = I_x
+                I_y_k[_yi] = I_y
+                I_t_k[_yi] = I_t
 
-            I_x_k_flat = I_x_k.flatten()
-            I_y_k_flat = I_y_k.flatten()
-            I_t_k_flat = I_t_k.flatten()
+            I_x_k_sum = signal.convolve2d(I_x_k, kernel_sum, boundary='symm', mode='same').flatten()
+            I_y_k_sum = signal.convolve2d(I_y_k, kernel_sum, boundary='symm', mode='same').flatten()
+            I_t_k_sum = signal.convolve2d(I_t_k, kernel_sum, boundary='symm', mode='same').flatten()
 
-            A = np.asmatrix(np.array([[I_x_k_flat], [I_y_k_flat]])).transpose()
-            b = np.array([I_t_k_flat]).transpose()
-
+            A = np.asmatrix(np.array([[I_x_k_sum], [I_y_k_sum]])).transpose()
+            b = np.array([I_t_k_sum]).transpose()
             A_sqr = A.T * A
-            # TODO: Just do a pseudo-inverse?
-            if np.linalg.det(A_sqr) <= 0:
-                continue
+            v = np.linalg.pinv(A_sqr) * A.T * b
 
-            v = np.linalg.inv(A_sqr) * A.T * b
-
-            # TODO: Aperture problem condition, commented out since not sure how the eigenvalues are supposed to scale
+            # # TODO: Aperture problem condition, commented out since not sure how the eigenvalues are supposed to scale
             # eigenvalue_1 = np.min(abs(np.linalg.eigvals(A_sqr)))
-            # print(eigenvalue_1)
-            # if eigenvalue_1 >= 3572706044:
-            #      continue
+            # if eigenvalue_1 >= 90450873:
+            #     continue
 
             # Normalized then scaled vector for displaying purposes
             v_norm = np.array(v) / (np.sqrt(np.sum(np.array(v) ** 2)) + eps) * 15
@@ -84,7 +100,7 @@ def get_index(_x, _y, _h):
     return _h * _y + _x
 
 
-cap = cv2.VideoCapture('video2.mov')
+cap = cv2.VideoCapture('video.mov')
 cap.set(3, 160)
 cap.set(4, 90)
 
@@ -94,13 +110,10 @@ last_frame = frame
 width = frame.shape[1]
 height = frame.shape[0]
 
-n = 9
+n = 7
 x = np.linspace(0, width - 1, n, dtype=int)
 y = np.linspace(0, height - 1, n, dtype=int)
 
-# n = 1
-# x = [100]
-# y = [100]
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 
 out = cv2.VideoWriter('001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
@@ -108,15 +121,19 @@ out = cv2.VideoWriter('001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))
 i = 0
 while cap.isOpened():
     ret, frame = cap.read()
-    if i % 2 == 0:
-        i += 1
-        continue
-    step_frame = np.copy(frame)
-
-    frame, empty_frame = lucas_kanade(frame, last_frame, x, y, n)
-    last_frame = step_frame
 
     if ret:
+        if i % 2 == 0:
+            i += 1
+            continue
+        step_frame = np.copy(frame)
+        # x, y = get_corners(frame)
+        # n = x.shape[0]
+        frame = lucas_kanade(frame, last_frame, x, y, n)
+        last_frame = step_frame
+
+        # print(x,y,n)
+
         cv2.imshow('Frame', frame)
         out.write(frame)
 
