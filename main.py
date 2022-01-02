@@ -64,7 +64,6 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             _y = _Y[_j]
             o_x = k_w - _x
             o_y = k_h - _y
-
             for _yi in range(0, k_h):
                 # print(o_y + _yi)
                 I_x = _grad_x[o_y + _yi][o_x - math.floor(k_w / 2): o_x + math.floor(k_w / 2) + 1]
@@ -100,15 +99,16 @@ def get_index(_x, _y, _h):
     return _h * _y + _x
 
 
-cap = cv2.VideoCapture('video.mov')
-cap.set(3, 160)
-cap.set(4, 90)
+width = 1080
+height = 720
+
+cap = cv2.VideoCapture('videos/video.mov')
+cap.set(3, width)
+cap.set(4, height)
 
 ret, frame = cap.read()
-last_frame = frame
+last_frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
 
-width = frame.shape[1]
-height = frame.shape[0]
 
 n = 7
 x = np.linspace(0, width - 1, n, dtype=int)
@@ -116,7 +116,7 @@ y = np.linspace(0, height - 1, n, dtype=int)
 
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 
-out = cv2.VideoWriter('001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
+out = cv2.VideoWriter('videos/output001.avi', fourcc, 20.0, (int(cap.get(3)), int(cap.get(4))))
 
 i = 0
 while cap.isOpened():
@@ -126,13 +126,11 @@ while cap.isOpened():
         if i % 2 == 0:
             i += 1
             continue
+        frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
         step_frame = np.copy(frame)
-        # x, y = get_corners(frame)
-        # n = x.shape[0]
+
         frame = lucas_kanade(frame, last_frame, x, y, n)
         last_frame = step_frame
-
-        # print(x,y,n)
 
         cv2.imshow('Frame', frame)
         out.write(frame)
