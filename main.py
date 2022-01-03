@@ -64,12 +64,8 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
                 I_y_k[_yi] = _grad_y[o_y + _yi][o_x - k_c: o_x + k_c + 1]
                 I_t_k[_yi] = _grad_t[o_y + _yi][o_x - k_c: o_x + k_c + 1]
 
-            I_x_k_sum = signal.convolve2d(I_x_k, kernel_sum, boundary='symm', mode='same').flatten()
-            I_y_k_sum = signal.convolve2d(I_y_k, kernel_sum, boundary='symm', mode='same').flatten()
-            I_t_k_sum = signal.convolve2d(I_t_k, kernel_sum, boundary='symm', mode='same').flatten()
-
-            A = np.asmatrix(np.array([[I_x_k_sum], [I_y_k_sum]])).transpose()
-            b = np.array([I_t_k_sum]).transpose()
+            A = np.asmatrix(np.array([[I_x_k.flatten()], [I_y_k.flatten()]])).transpose()
+            b = np.array([I_t_k.flatten()]).transpose()
             A_sqr = A.T * A
             v = np.linalg.pinv(A_sqr) * A.T * b
 
@@ -77,7 +73,7 @@ def lucas_kanade(_frame, _last_frame, _X, _Y, _n):
             eig1 = np.max(eigenvalues)
             eig2 = np.min(eigenvalues)
             ratio = eig1/eig2
-            if ratio >= 1000:
+            if ratio >= 100:
                 continue
 
             # Normalized then scaled vector for displaying purposes
@@ -97,11 +93,11 @@ def get_index(_x, _y, _h):
 # height = 270
 width = 640
 height = 360
-k_size = 15
+k_size = 41
 
 cap = cv2.VideoCapture('videos/video.mov')
-cap.set(3, height)
-cap.set(4, width)
+cap.set(3, width)
+cap.set(4, height)
 
 ret, frame = cap.read()
 last_frame = frame
